@@ -10,3 +10,4 @@ pyyaml
 rich
 numpy
 faiss-cpu
+langchain-chroma
