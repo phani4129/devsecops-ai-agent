@@ -1,0 +1,62 @@
+[
+  {
+    "id": "cis-aws-s3-1",
+    "title": "S3 Bucket Public Access",
+    "category": "storage",
+    "content": "S3 buckets should never have public-read or public-read-write ACLs unless explicitly required for static website hosting with no sensitive data. A public-read ACL allows any unauthenticated user on the internet to list and download every object in the bucket. The correct default is acl = \"private\" combined with an explicit aws_s3_bucket_public_access_block resource that blocks public ACLs and public policies at the account or bucket level. This maps to CIS AWS Foundations Benchmark control 2.1.5."
+  },
+  {
+    "id": "cis-aws-s3-2",
+    "title": "S3 Bucket Encryption at Rest",
+    "category": "storage",
+    "content": "All S3 buckets storing application or customer data must have server-side encryption enabled, ideally using aws:kms rather than AES256, so that key usage is logged in CloudTrail and access can be revoked independently of the bucket itself. Defining an aws_s3_bucket_server_side_encryption_configuration resource is not sufficient on its own if it is not actually referenced by the bucket id it is meant to protect — a common mistake is creating the encryption resource but never wiring its bucket attribute to the target bucket. This maps to CIS AWS Foundations Benchmark control 2.1.1."
+  },
+  {
+    "id": "cis-aws-sg-1",
+    "title": "Security Group Ingress Rules",
+    "category": "network",
+    "content": "Security groups should never allow ingress on administrative ports (22 for SSH, 3389 for RDP) from 0.0.0.0/0. This exposes the instance to credential-stuffing and brute-force attacks from anywhere on the internet. The correct pattern restricts cidr_blocks to a known corporate VPN range, a bastion host's IP, or uses AWS Systems Manager Session Manager instead of direct SSH/RDP access entirely. This maps to CIS AWS Foundations Benchmark controls 5.2 and 5.3."
+  },
+  {
+    "id": "cis-aws-iam-1",
+    "title": "IAM Policy Least Privilege",
+    "category": "iam",
+    "content": "IAM policies should never combine a wildcard Action of \"*\" with a wildcard Resource of \"*\" in an Allow statement. This grants the attached principal unrestricted access to every AWS service and resource in the account, including the ability to create new IAM users, modify other policies, and exfiltrate data from any service. Policies should enumerate specific actions (e.g. s3:GetObject, s3:ListBucket) and scope the Resource field to specific ARNs. This is one of the most common root causes of full account compromise in incident response reports, and maps to the AWS Well-Architected Security Pillar principle of least privilege."
+  },
+  {
+    "id": "cis-aws-rds-1",
+    "title": "RDS Instance Public Accessibility and Encryption",
+    "category": "database",
+    "content": "RDS database instances should never set publicly_accessible = true unless there is a specific, documented business reason, since this assigns a publicly resolvable DNS endpoint and allows connection attempts from the internet, relying solely on the security group and database credentials as the only barrier. Additionally, storage_encrypted should always be true for any database holding production or customer data, encrypting data at rest using KMS. Hardcoded passwords in source code (e.g. password = \"changeme123\") should never appear in version control; use a variable sourced from AWS Secrets Manager, SSM Parameter Store, or a .tfvars file excluded from git. This maps to CIS AWS Foundations Benchmark control 2.3.1."
+  },
+  {
+    "id": "cis-k8s-1",
+    "title": "Kubernetes Container Privilege Escalation",
+    "category": "kubernetes",
+    "content": "Containers should never run with securityContext.privileged = true unless absolutely required for specific low-level system operations (e.g. certain CNI plugins or storage drivers), since a privileged container has near-complete access to the host's devices and kernel capabilities, effectively breaking container isolation. Combined with runAsUser = 0, a compromised container running as root with privileged access can fully compromise the underlying node. The corrected configuration sets privileged = false, runAsNonRoot = true, and runAsUser to a non-zero UID. This maps to the CIS Kubernetes Benchmark section 5.2 (Pod Security Standards)."
+  },
+  {
+    "id": "cis-k8s-2",
+    "title": "Kubernetes Host Namespace Sharing",
+    "category": "kubernetes",
+    "content": "Pods should not set hostNetwork: true or hostPID: true unless there is a specific networking or monitoring tool requirement. hostNetwork removes network isolation between the pod and the underlying node, exposing the node's network interfaces directly to the container, while hostPID allows the container to see and potentially signal every process running on the host, including processes from other pods. Both settings significantly weaken the security boundary Kubernetes is designed to provide. This maps to CIS Kubernetes Benchmark section 5.2.4."
+  },
+  {
+    "id": "cis-k8s-3",
+    "title": "Kubernetes Secrets Management",
+    "category": "kubernetes",
+    "content": "Sensitive values such as database passwords, API keys, and tokens should never be passed as plain env entries with a literal value field in a Deployment manifest, since this stores the secret in plaintext in the pod spec, visible to anyone with read access to the Deployment object and persisted in cluster audit logs. The correct pattern is to store the value in a Kubernetes Secret object and reference it via env.valueFrom.secretKeyRef, or to use an external secrets manager integration (e.g. AWS Secrets Manager CSI driver, HashiCorp Vault) so the value never enters the Deployment manifest at all. This maps to CIS Kubernetes Benchmark section 5.4.1."
+  },
+  {
+    "id": "cis-k8s-4",
+    "title": "Kubernetes Resource Limits",
+    "category": "kubernetes",
+    "content": "Containers without defined resources.limits for CPU and memory can consume unbounded node resources, leading to noisy-neighbor problems and potential node-level denial of service if a single pod experiences a memory leak or runaway process. Every container spec should define both resources.requests and resources.limits appropriate to its expected workload. This is a reliability and security control, since resource exhaustion is itself a common availability attack vector and a way for a compromised container to disrupt co-located workloads."
+  },
+  {
+    "id": "cis-network-1",
+    "title": "Network LoadBalancer Service Exposure",
+    "category": "network",
+    "content": "Kubernetes Services of type LoadBalancer provision a cloud-provider load balancer with a public IP by default unless explicitly annotated otherwise (e.g. with an internal-facing annotation for AWS, Azure, or GCP). Before exposing a Service this way, confirm whether the workload genuinely needs internet-facing exposure, and if not, use an internal load balancer annotation or switch to a ClusterIP Service combined with an Ingress controller that enforces TLS termination and access controls at a single, auditable entry point."
+  }
+]

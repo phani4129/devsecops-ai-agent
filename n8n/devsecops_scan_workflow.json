@@ -1,0 +1,97 @@
+{
+  "name": "DevSecOps AI Agent - Scan Trigger",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "devsecops-scan",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook - Receive scan request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "devsecops-scan-trigger",
+      "notes": "Triggered by a GitHub push webhook, a CI pipeline step, or a manual POST. Expects JSON body: { \"repo_path\": \"/path/to/terraform/or/k8s/files\" }"
+    },
+    {
+      "parameters": {
+        "command": "=python3 /home/user/devsecops-ai-agent/cli_scan.py --path \"{{ $json.repo_path }}\" --output /tmp/scan_result.json"
+      },
+      "id": "execute-scan",
+      "name": "Run agent pipeline (CLI)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [460, 300],
+      "notes": "Calls the same LangGraph pipeline used by the Streamlit app, via a thin CLI wrapper (cli_scan.py), so n8n and the UI share one source of truth instead of duplicating pipeline logic."
+    },
+    {
+      "parameters": {
+        "filePath": "/tmp/scan_result.json"
+      },
+      "id": "read-result",
+      "name": "Read scan result JSON",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.critical_count }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-critical",
+      "name": "Any CRITICAL findings?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300],
+      "notes": "Branches the workflow: if there are CRITICAL findings, this can notify Slack / fail the CI build / open a ticket. If clean, it can post a success message instead. Wire your own Slack/Jira/Teams node onto each branch based on what you have connected."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "respond",
+      "name": "Respond with report",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Receive scan request": {
+      "main": [[{ "node": "Run agent pipeline (CLI)", "type": "main", "index": 0 }]]
+    },
+    "Run agent pipeline (CLI)": {
+      "main": [[{ "node": "Read scan result JSON", "type": "main", "index": 0 }]]
+    },
+    "Read scan result JSON": {
+      "main": [[{ "node": "Any CRITICAL findings?", "type": "main", "index": 0 }]]
+    },
+    "Any CRITICAL findings?": {
+      "main": [
+        [{ "node": "Respond with report", "type": "main", "index": 0 }],
+        [{ "node": "Respond with report", "type": "main", "index": 0 }]
+      ]
+    }
+  }
+}

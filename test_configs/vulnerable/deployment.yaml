@@ -1,0 +1,51 @@
+# Intentionally vulnerable Kubernetes manifests for testing the DevSecOps AI Agent.
+# Issues planted here (do not deploy this in a real cluster):
+#   1. Container running as root (no securityContext / runAsNonRoot)
+#   2. Privileged container
+#   3. No resource limits (can starve the node)
+#   4. hostNetwork / hostPID enabled
+#   5. Secrets passed as plain environment variables instead of Secret refs
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: insecure-app
+  labels:
+    app: insecure-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: insecure-app
+  template:
+    metadata:
+      labels:
+        app: insecure-app
+    spec:
+      hostNetwork: true
+      hostPID: true
+      containers:
+        - name: app
+          image: myapp:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DATABASE_PASSWORD
+              value: "supersecretpassword123"
+            - name: API_KEY
+              value: "sk-prod-1234567890abcdef"
+          securityContext:
+            privileged: true
+            runAsUser: 0
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: insecure-app-svc
+spec:
+  type: LoadBalancer
+  selector:
+    app: insecure-app
+  ports:
+    - port: 80
+      targetPort: 8080

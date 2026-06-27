@@ -1,0 +1,12 @@
+langchain
+langgraph
+langchain-groq
+langchain-huggingface
+sentence-transformers
+streamlit
+checkov
+python-dotenv
+pyyaml
+rich
+numpy
+faiss-cpu
