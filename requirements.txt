@@ -11,3 +11,5 @@ rich
 numpy
 faiss-cpu
 langchain-chroma
+requests
+python-dotenv

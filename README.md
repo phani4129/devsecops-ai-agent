@@ -16,25 +16,45 @@ remediation, orchestrated as a five-node LangGraph pipeline.
 ## Architecture
 
 ```
-n8n webhook (optional trigger)
+GitHub Push / Pull Request
         |
         v
-  parser_agent              reads Terraform/K8s files, extracts resources
+GitHub Actions CI/CD Pipeline
+        |
+        |-- Python syntax check
+        |-- Bandit security scan
+        |-- Checkov IaC scan
+        |-- Trivy filesystem scan
+        |-- Upload security reports
         |
         v
-  security_scanner_agent    Checkov (static rules) + Groq LLM (contextual reasoning)
+CI/CD Dashboard in Streamlit
+
+
+n8n Webhook / Streamlit UI / CLI Scan
         |
         v
-  rag_knowledge_agent        retrieves relevant CIS Benchmark snippets from ChromaDB
+parser_agent
+reads Terraform/Kubernetes files and extracts IaC resources
         |
         v
-  remediation_agent          generates a fix + explanation, grounded in retrieved context
+security_scanner_agent
+runs Checkov static rules and Groq LLM contextual reasoning
         |
         v
-  report_agent                compiles everything into one markdown report
+rag_knowledge_agent
+retrieves relevant CIS Benchmark-style snippets from ChromaDB
         |
         v
-  Streamlit UI / CLI output
+remediation_agent
+generates grounded fixes with explanation
+        |
+        v
+report_agent
+compiles findings, remediations, and evidence into one markdown report
+        |
+        v
+Streamlit UI / CLI output / n8n response
 ```
 
 Each agent is a LangGraph node that reads and writes to one shared state
@@ -79,27 +99,33 @@ checkable against a real source instead of trusted blindly.
 
 ```
 devsecops-ai-agent/
+├── .github/
+│   └── workflows/
+│       └── devsecops-ci.yml              GitHub Actions CI/CD pipeline
 ├── agents/
-│   ├── state.py                   shared LangGraph state schema
-│   ├── parser_agent.py            agent 1: extracts resources from IaC
-│   ├── security_scanner_agent.py  agent 2: Checkov + LLM scanning
-│   ├── rag_knowledge_agent.py     agent 3: retrieves grounding context
-│   ├── remediation_agent.py       agent 4: generates grounded fixes
-│   ├── report_agent.py            agent 5: compiles the final report
-│   └── graph.py                   wires all 5 agents into the LangGraph pipeline
+│   ├── state.py                          shared LangGraph state schema
+│   ├── parser_agent.py                   agent 1: extracts resources from IaC
+│   ├── security_scanner_agent.py         agent 2: Checkov + LLM scanning
+│   ├── rag_knowledge_agent.py            agent 3: retrieves grounding context
+│   ├── remediation_agent.py              agent 4: generates grounded fixes
+│   ├── report_agent.py                   agent 5: compiles the final report
+│   └── graph.py                          wires all 5 agents into the LangGraph pipeline
+├── utils/
+│   └── github_actions.py                 GitHub API helper for CI/CD dashboard
 ├── knowledge_base/
-│   ├── security_knowledge.json    CIS-Benchmark-style knowledge corpus
-│   └── build_knowledge_base.py    one-time script to build the Chroma index
+│   ├── security_knowledge.json           CIS-Benchmark-style knowledge corpus
+│   └── build_knowledge_base.py           one-time script to build the Chroma index
 ├── test_configs/
-│   ├── vulnerable/                sample configs with planted real issues
-│   └── safe/                      remediated versions (sanity-check no false positives)
+│   ├── vulnerable/                       sample configs with planted real issues
+│   └── safe/                             remediated versions
 ├── n8n/
-│   └── devsecops_scan_workflow.json   importable n8n workflow (webhook -> scan -> respond)
-├── app.py                          Streamlit UI
-├── cli_scan.py                     CLI entry point (used by n8n + CI/CD)
+│   └── devsecops_scan_workflow.json      importable n8n workflow
+├── app.py                                Streamlit UI
+├── cli_scan.py                           CLI entry point
 ├── requirements.txt
-├── setup.sh                        one-command local setup
-└── .env.example
+├── setup.sh                              one-command local setup
+├── .env.example
+└── README.md
 ```
 
 ## Running it on your own laptop
@@ -108,6 +134,7 @@ devsecops-ai-agent/
 - Python 3.10+
 - ~2GB free disk space (for the embedding model + dependencies)
 - A free Groq API key — sign up at https://console.groq.com/keys (no card required)
+- Generate Github API token
 
 ### 2. Setup (macOS / Linux)
 
@@ -119,12 +146,14 @@ chmod +x setup.sh
 ```
 
 This creates a virtual environment, installs dependencies, copies
-`.env.example` to `.env`, and builds the local Chroma vector store.
+and builds the local Chroma vector store.
 
-After it finishes, open `.env` and paste in your Groq API key:
+After it finishes, open `.env` and paste in your Groq API key and GitHub credentials:
 
 ```
 GROQ_API_KEY=gsk_your_actual_key_here
+GITHUB_REPO=
+GITHUB_TOKEN=
 ```
 
 ### 2b. Setup (Windows)
@@ -137,11 +166,10 @@ cd devsecops-ai-agent
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-copy .env.example .env
 python knowledge_base\build_knowledge_base.py
 ```
 
-Then edit `.env` and add your Groq API key.
+Then edit `.env` and add your Groq API key and GitHub credentials.
 
 ### 3. Run the app
 
